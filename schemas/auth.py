@@ -14,3 +14,7 @@ class EmailSchema(SQLModel):
 class PasswordResetSchema(SQLModel):
     token: str
     new_password: str
+
+class VerificationCodeSchema(SQLModel):
+    email: str
+    code: str

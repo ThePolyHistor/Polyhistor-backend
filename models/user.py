@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlmodel import Field, SQLModel
 from typing import Optional
 
@@ -13,6 +13,8 @@ class User(SQLModel, table=True):
     hashed_password: str
     is_active: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    verification_code: Optional[str] = Field(default=None, index=True)
+    verification_code_expires_at: Optional[datetime] = Field(default=None)
 
 class TokenBlocklist(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)

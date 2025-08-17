@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 
 from auth import security
@@ -11,7 +11,7 @@ from core.config import settings
 from core.mailer import send_verification_email, send_password_reset_email
 from models.user import User, TokenBlocklist
 from schemas.user import UserCreate, UserPublic
-from schemas.auth import Token, EmailSchema, PasswordResetSchema
+from schemas.auth import Token, EmailSchema, PasswordResetSchema, VerificationCodeSchema
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -34,41 +34,49 @@ def create_user(
     user_data["hashed_password"] = hashed_password
     
     new_user = User(**user_data)
+    
+    # Generate and set verification code
+    verification_code = security.generate_verification_code()
+    new_user.verification_code = verification_code
+    new_user.verification_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
     session.add(new_user)
     session.commit()
     session.refresh(new_user)
 
-    # Generate a token and send verification email in the background
-    token = security.create_access_token(
-        data={"sub": new_user.email},
-        expires_delta=timedelta(minutes=15)
-    )
-    background_tasks.add_task(send_verification_email, new_user.email, token)
+    # Send verification code in the background
+    background_tasks.add_task(send_verification_email, new_user.email, verification_code)
 
-    return {"message": "Signup successful. Please check your email to verify your account."}
+    return {"message": "Signup successful. Please check your email for the verification code."}
 
 
-@router.get("/verify-email")
-def verify_email(token: str, session: Session = Depends(get_session)):
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=400, detail="Invalid token")
-    except JWTError:
-        raise HTTPException(status_code=400, detail="Invalid token")
+@router.post("/verify-code")
+def verify_code(
+    verification_data: VerificationCodeSchema,
+    session: Session = Depends(get_session)
+):
+    user = session.exec(select(User).where(User.email == verification_data.email)).first()
 
-    user = session.exec(select(User).where(User.email == email)).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found.")
+    
     if user.is_active:
-        return {"message": "Email already verified"}
+        raise HTTPException(status_code=400, detail="Account is already active.")
+
+    if user.verification_code != verification_data.code:
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+        
+    if user.verification_code_expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Verification code has expired.")
         
     user.is_active = True
+    user.verification_code = None # Clear the code after use
+    user.verification_code_expires_at = None
+    
     session.add(user)
     session.commit()
     
-    return {"message": "Email verified successfully"}
+    return {"message": "Account verified successfully."}
 
 
 @router.post("/login", response_model=Token)

@@ -2,12 +2,7 @@ import logging
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from core.config import settings
 
-# --- Start of Changes ---
-
-# 1. Configure a simple logger
 log = logging.getLogger(__name__)
-
-# --- End of Changes ---
 
 conf = ConnectionConfig(
     MAIL_USERNAME=settings.MAIL_USERNAME,
@@ -21,22 +16,20 @@ conf = ConnectionConfig(
     VALIDATE_CERTS=False # For development
 )
 
-async def send_verification_email(email_to: str, token: str):
+async def send_verification_email(email_to: str, code: str):
     message = MessageSchema(
-        subject="Verify Your Email Address",
+        subject="Your Verification Code",
         recipients=[email_to],
         body=f"""
-        <p>Thank you for registering. Please click the link below to verify your email address:</p>
-        <p><a href="{settings.FRONTEND_URL}/verify-email?token={token}">Verify Email</a></p>
-        <p>This link will expire in 15 minutes.</p>
+        <p>Thank you for registering. Use the code below to verify your account:</p>
+        <h2 style="font-size: 24px; letter-spacing: 4px; text-align: center;">{code}</h2>
+        <p>This code will expire in 10 minutes.</p>
         """,
         subtype="html"
     )
     fm = FastMail(conf)
     await fm.send_message(message)
-    # --- Start of Changes ---
-    log.info(f"Verification email sent to: {email_to}")
-    # --- End of Changes ---
+    log.info(f"Verification email with code sent to: {email_to}")
 
 
 async def send_password_reset_email(email_to: str, token: str):
@@ -52,6 +45,4 @@ async def send_password_reset_email(email_to: str, token: str):
     )
     fm = FastMail(conf)
     await fm.send_message(message)
-    # --- Start of Changes ---
     log.info(f"Password reset email sent to: {email_to}")
-    # --- End of Changes ---

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import uuid
+import random
 
 from core.config import settings
 
@@ -27,3 +28,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 def create_refresh_token(data: dict) -> str:
     expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     return create_access_token(data=data, expires_delta=expires)
+
+def generate_verification_code(length: int = 6) -> str:
+    """Generates a random numerical verification code."""
+    return "".join([str(random.randint(0, 9)) for _ in range(length)])
